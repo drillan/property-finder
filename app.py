@@ -35,8 +35,12 @@ def make_or_cond_query(col_name: str, items: list) -> str:
 
 @st.fragment
 def search():
-    type_ = st.multiselect(
+    price_category = st.multiselect(
         label="取引の種類",
+        options=['不動産取引価格情報', '成約価格情報'],
+    )
+    type_ = st.multiselect(
+        label="種類",
         options=["中古マンション等", "宅地(土地と建物)", "宅地(土地)"],
     )
     region = st.multiselect(label="地区", options=["住宅地", "工業地", "商業地"])
@@ -377,6 +381,9 @@ def search():
     if st.button("Search"):
         filtered_data = data
         filter_count = 0
+        if price_category:
+            filtered_data = duckdb.sql(make_or_cond_query("PriceCategory", price_category))
+            filter_count += 1
         if type_:
             filtered_data = duckdb.sql(make_or_cond_query("Type", type_))
             filter_count += 1
