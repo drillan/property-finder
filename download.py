@@ -11,7 +11,8 @@ url = "https://www.reinfolib.mlit.go.jp/ex-api/external/XIT001"
 cities = [
     "13102",  # 中央区
     "13106",  # 台東区
-    "13108",  # 江東区
+    # "13108",  # 江東区
+    "13101",  # 千代田区
 ]
 years = [str(year) for year in range(2010, 2025)]
 subscription_key = os.environ.get("OCP_APIM_SUBSCRIPTION_KEY")

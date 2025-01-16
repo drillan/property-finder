@@ -177,6 +177,7 @@ pyrightconfig.json
 
 # Work
 
-./data/raw_data/*
+data/raw_data/*
+work/*
 work.py
 work.ipynb
