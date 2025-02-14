@@ -46,7 +46,7 @@ def search():
     region = st.multiselect(label="地区", options=["住宅地", "工業地", "商業地"])
     municipality = st.multiselect(
         label="市区町村名",
-        options=["台東区", "江東区", "中央区"],
+        options=["台東区", "千代田区", "中央区"],
     )
     districtName = st.multiselect(
         label="地区名",
