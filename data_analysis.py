@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+# 定数
 DEFAULT_DISTRICTS = [
     "浅草橋",
     "柳橋",
@@ -52,20 +53,19 @@ DEFAULT_DISTRICTS = [
     "神田美土代町",
 ]
 
+LIMIT_ROWS = 10000  # データ抽出時の行数制限
 
-def get_unique_values(rel, column):
+def get_sorted_unique_values(rel, column) -> list:
     """
     指定されたカラムからDataFrameのユニークな値をソート済みで取得する。
     """
     try:
         if column in rel.columns:
-            distinct_rel = rel.project(column).distinct().order(column)
-            unique_df = distinct_rel.df()
+            unique_df = rel.project(column).distinct().order(column).df()
             return unique_df[column].tolist()
     except Exception as e:
         st.error(f"Error retrieving unique values for {column}: {e}")
     return []
-
 
 def apply_in_filter(rel, column, values):
     """
@@ -77,18 +77,14 @@ def apply_in_filter(rel, column, values):
         return rel.filter(f"{column} IN ({values_str})")
     return rel
 
-
 def filter_used_mansions(rel):
     """
     "中古マンション等" のみを抽出したrelationを返す。
     """
     if "Type" in rel.columns:
-        # "中古マンション等" にフィルタリング
         return rel.filter("Type = '中古マンション等'")
-    else:
-        st.info("データに 'Type'(種類) カラムが見つかりません。")
-        return rel
-
+    st.info("データに 'Type'(種類) カラムが見つかりません。")
+    return rel
 
 def compute_tradeprice_per_area(rel):
     """
@@ -96,10 +92,26 @@ def compute_tradeprice_per_area(rel):
     """
     if "TradePrice" in rel.columns and "Area" in rel.columns:
         return rel.project("*, TradePrice / Area as TradePricePerArea")
-    else:
-        st.info("取引価格(TradePrice)または面積(Area)のカラムが見つかりません。")
-        return rel
+    st.info("取引価格(TradePrice)または面積(Area)のカラムが見つかりません。")
+    return rel
 
+def render_treemap_chart(df):
+    """
+    Treemapチャートを描画するヘルパー関数
+    """
+    fig_treemap = px.treemap(
+        df,
+        path=["Municipality", "DistrictName"],
+        title="件数"
+    )
+    st.plotly_chart(fig_treemap)
+
+def render_bar_chart_chart(df):
+    """
+    棒グラフチャートを描画するヘルパー関数
+    """
+    fig_bar = px.bar(df, x="地区名", y="件数", title="地区ごとの件数")
+    st.plotly_chart(fig_bar)
 
 def plot_district_count_charts(rel):
     """
@@ -110,47 +122,35 @@ def plot_district_count_charts(rel):
     col1, col2 = st.columns(2)
     treemap_selected = col1.checkbox("Treemap", value=True)
     bar_selected = col2.checkbox("棒グラフ", value=True)
-    chart_options = []
+    
     if treemap_selected:
-        chart_options.append("Treemap")
-    if bar_selected:
-        chart_options.append("棒グラフ")
-
-    # Treemapチャート
-    if "Treemap" in chart_options:
         if "Municipality" in rel.columns and "DistrictName" in rel.columns:
             st.subheader("市区町村・地区ごとの件数")
             treemap_df = rel.df()
-            fig_treemap = px.treemap(
-                treemap_df,
-                path=["Municipality", "DistrictName"],
-                title="件数"
-            )
-            st.plotly_chart(fig_treemap)
+            render_treemap_chart(treemap_df)
         else:
             st.info("データに 'Municipality' または 'DistrictName' カラムが見つかりません。")
-
-    # 棒グラフチャート
-    if "棒グラフ" in chart_options:
+    
+    if bar_selected:
         if "DistrictName" in rel.columns:
             st.subheader("地区ごとの件数")
-            district_counts_rel = rel.aggregate("COUNT(*) AS 件数, DistrictName AS 地区名", "DistrictName").order("件数 DESC")
+            district_counts_rel = rel.aggregate("COUNT(*) AS 件数, DistrictName AS 地区名", "DistrictName")\
+                                     .order("件数 DESC")
             district_counts_df = district_counts_rel.df()
-            fig_bar = px.bar(district_counts_df, x="地区名", y="件数", title="地区ごとの件数")
-            st.plotly_chart(fig_bar)
+            render_bar_chart_chart(district_counts_df)
         else:
             st.info("データに 'DistrictName' カラムが見つかりません。")
-
 
 def draw_tradeprice_box_chart(filtered_rel):
     """
     フィルタ済みrelationから箱ひげ図（TradePricePerAreaの分布）を描画する。
     """
+    rel_to_plot = filtered_rel
     if "Period" in filtered_rel.columns:
         # 集約クエリを使用して、Periodの範囲を効率的に取得する
-        period_range = filtered_rel.aggregate("MIN(Period) as min_period, MAX(Period) as max_period").df()
-        min_period = period_range["min_period"].iloc[0]
-        max_period = period_range["max_period"].iloc[0]
+        period_range_df = filtered_rel.aggregate("MIN(Period) as min_period, MAX(Period) as max_period").df()
+        min_period = period_range_df["min_period"].iloc[0]
+        max_period = period_range_df["max_period"].iloc[0]
         try:
             if isinstance(min_period, pd.Timestamp):
                 min_period = min_period.to_pydatetime()
@@ -164,10 +164,12 @@ def draw_tradeprice_box_chart(filtered_rel):
             max_value=max_period,
             value=(min_period, max_period)
         )
-        # 選択された期間でrelationにフィルタを適用（全件読み込みを避ける）
-        filtered_rel = filtered_rel.filter(f"Period >= '{selected_period_range[0]}' AND Period <= '{selected_period_range[1]}'")
-    # プロット用に必要な行数だけを読み込む (例: 10000行)
-    box_df = filtered_rel.limit(10000).df()
+        # 新しい変数にフィルタを適用
+        rel_to_plot = filtered_rel.filter(
+            f"Period >= '{selected_period_range[0]}' AND Period <= '{selected_period_range[1]}'"
+        )
+        
+    box_df = rel_to_plot.limit(LIMIT_ROWS).df()
 
     group_by_options = ["DistrictName"]
     if "Period" in box_df.columns:
@@ -187,80 +189,80 @@ def draw_tradeprice_box_chart(filtered_rel):
     )
     st.plotly_chart(fig_box)
 
-
 def draw_tradeprice_time_series_chart(filtered_rel, available_districts):
     """
     フィルタ済みrelationから時系列の箱ひげ図（地区ごとのTradePricePerAreaの時系列分布）を描画する。
     """
-    if "Period" in filtered_rel.columns:
-        available_ts_districts = available_districts if available_districts else DEFAULT_DISTRICTS
-        # DistrictNameから選択できるようにする。デフォルトは「日本橋横山町」と「東日本橋」
-        selected_line_districts = st.multiselect(
-            "線グラフ用の地区を選択してください",
-            options=available_ts_districts,
-            default=["日本橋横山町", "東日本橋"]
-        )
-        ts_rel = apply_in_filter(filtered_rel, "DistrictName", selected_line_districts)
-        ts_rel = ts_rel.order("Period")
-        line_df = ts_rel.limit(10000).df()
-        if not line_df.empty:
-            fig_time_series = px.box(
-                line_df,
-                x="Period",
-                y="TradePricePerArea",
-                color="DistrictName",
-                title=f"地区ごとの面積当たりの取引価格の時系列分布 ({', '.join(selected_line_districts)})"
-            )
-            st.plotly_chart(fig_time_series)
-        else:
-            st.info(f"選択された地区({', '.join(selected_line_districts)})のデータがありません。")
-    else:
+    if "Period" not in filtered_rel.columns:
         st.info("データに 'Period' カラムが見つかりません。")
+        return
 
+    available_ts_districts = available_districts if available_districts else DEFAULT_DISTRICTS
+    selected_line_districts = st.multiselect(
+        "線グラフ用の地区を選択してください",
+        options=available_ts_districts,
+        default=["日本橋横山町", "東日本橋"]
+    )
+    ts_rel = apply_in_filter(filtered_rel, "DistrictName", selected_line_districts)
+    ts_rel = ts_rel.order("Period")
+    line_df = ts_rel.limit(LIMIT_ROWS).df()
+    if not line_df.empty:
+        fig_time_series = px.box(
+            line_df,
+            x="Period",
+            y="TradePricePerArea",
+            color="DistrictName",
+            title=f"地区ごとの面積当たりの取引価格の時系列分布 ({', '.join(selected_line_districts)})"
+        )
+        st.plotly_chart(fig_time_series)
+    else:
+        st.info(f"選択された地区({', '.join(selected_line_districts)})のデータがありません。")
 
 def plot_tradeprice_area_charts(rel):
     """
     全体の面積当たりの取引価格の箱ひげ図と、期間別の時系列箱ひげ図を表示する。
     また、間取り(FloorPlan)および建物構造(Structure)によるフィルタも適用可能とする。
     """
-    if "DistrictName" in rel.columns and "TradePricePerArea" in rel.columns:
-        st.subheader("面積当たりの取引価格")
-        unique_districts = get_unique_values(rel, "DistrictName")
-        selected_districts = st.multiselect(
-            "地区を選択してください",
-            options=unique_districts if unique_districts else DEFAULT_DISTRICTS,
-            default=DEFAULT_DISTRICTS
-        )
-        if selected_districts:
-            filtered_rel = apply_in_filter(rel, "DistrictName", selected_districts)
-            if "FloorPlan" in rel.columns:
-                unique_floorplans = get_unique_values(rel, "FloorPlan")
-                selected_floorplans = st.multiselect(
-                    "間取りを選択してください",
-                    options=unique_floorplans,
-                    default=unique_floorplans
-                )
-                filtered_rel = apply_in_filter(filtered_rel, "FloorPlan", selected_floorplans)
-            if "Structure" in rel.columns:
-                unique_structures = get_unique_values(rel, "Structure")
-                selected_structures = st.multiselect(
-                    "建物構造を選択してください",
-                    options=unique_structures,
-                    default=unique_structures
-                )
-                filtered_rel = apply_in_filter(filtered_rel, "Structure", selected_structures)
-            
-            # 図の描画処理を分割した関数を呼び出す
-            st.write("【箱ひげ図】")
-            draw_tradeprice_box_chart(filtered_rel)
-            
-            st.write("【時系列箱ひげ図】")
-            draw_tradeprice_time_series_chart(filtered_rel, selected_districts)
-        else:
-            st.info("少なくとも1つの地区を選択してください。")
-    else:
+    if "DistrictName" not in rel.columns or "TradePricePerArea" not in rel.columns:
         st.info("データに 'DistrictName' または 'TradePricePerArea' カラムが見つかりません。")
+        return
 
+    st.subheader("面積当たりの取引価格")
+    unique_districts = get_sorted_unique_values(rel, "DistrictName")
+    selected_districts = st.multiselect(
+        "地区を選択してください",
+        options=unique_districts if unique_districts else DEFAULT_DISTRICTS,
+        default=DEFAULT_DISTRICTS
+    )
+    if not selected_districts:
+        st.info("少なくとも1つの地区を選択してください。")
+        return
+
+    filtered_rel = apply_in_filter(rel, "DistrictName", selected_districts)
+    
+    if "FloorPlan" in rel.columns:
+        unique_floorplans = get_sorted_unique_values(rel, "FloorPlan")
+        selected_floorplans = st.multiselect(
+            "間取りを選択してください",
+            options=unique_floorplans,
+            default=unique_floorplans
+        )
+        filtered_rel = apply_in_filter(filtered_rel, "FloorPlan", selected_floorplans)
+        
+    if "Structure" in rel.columns:
+        unique_structures = get_sorted_unique_values(rel, "Structure")
+        selected_structures = st.multiselect(
+            "建物構造を選択してください",
+            options=unique_structures,
+            default=unique_structures
+        )
+        filtered_rel = apply_in_filter(filtered_rel, "Structure", selected_structures)
+    
+    st.write("【箱ひげ図】")
+    draw_tradeprice_box_chart(filtered_rel)
+    
+    st.write("【時系列箱ひげ図】")
+    draw_tradeprice_time_series_chart(filtered_rel, selected_districts)
 
 def data_analysis_page():
     st.title("不動産データ分析")
@@ -277,7 +279,6 @@ def data_analysis_page():
         st.error(f"{data_file} が見つかりません。ファイルパスを確認してください。")
     except Exception as e:
         st.error(f"データ読み込み中にエラーが発生しました: {e}")
-
 
 if __name__ == "__main__":
     data_analysis_page()
