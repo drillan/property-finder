@@ -1,4 +1,5 @@
 import duckdb
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -82,15 +83,7 @@ def plot_type_counts(rel):
     "種類ごとの件数" を棒グラフで表示し、"中古マンション等" のみフィルタしたrelationを返す。
     """
     if "Type" in rel.columns:
-        st.subheader("種類ごとの件数")
-        type_counts_rel = (
-            rel.aggregate("COUNT(*) AS 件数, Type AS 種類", "Type")
-               .order("件数 DESC")
-        )
-        type_counts_df = type_counts_rel.df()
-        fig = px.bar(type_counts_df, x="種類", y="件数", title="種類ごとの件数")
-        st.plotly_chart(fig)
-        # "中古マンション等" にフィルタ
+        # チャート表示は行わず、初めから "中古マンション等" にフィルタリング
         return rel.filter("Type = '中古マンション等'")
     else:
         st.info("データに 'Type'(種類) カラムが見つかりません。")
@@ -182,23 +175,56 @@ def plot_tradeprice_area_charts(rel):
                 filtered_rel = apply_in_filter(filtered_rel, "Structure", selected_structures)
             
             box_df = filtered_rel.df()
+            # もしPeriod列が存在する場合、Periodでのフィルタリングをsliderで指定できるようにする
+            if "Period" in box_df.columns:
+                # min, max を取得（Periodが数値または日付である前提）
+                min_period = box_df["Period"].min()
+                max_period = box_df["Period"].max()
+                
+                # pd.Timestampの場合はPythonのdatetimeに変換
+                try:
+                    if isinstance(min_period, pd.Timestamp):
+                        min_period = min_period.to_pydatetime()
+                    if isinstance(max_period, pd.Timestamp):
+                        max_period = max_period.to_pydatetime()
+                except Exception as e:
+                    st.error(f"Error converting Timestamp: {e}")
+                
+                selected_period_range = st.slider(
+                    "Periodでフィルタリング",
+                    min_value=min_period,
+                    max_value=max_period,
+                    value=(min_period, max_period)
+                )
+                box_df = box_df[(box_df["Period"] >= selected_period_range[0]) & (box_df["Period"] <= selected_period_range[1])]
+
+            # グループ化カラムの選択: 'DistrictName'に加えて、'Period'が存在する場合は選択肢に追加
+            group_by_options = ["DistrictName"]
+            if "Period" in box_df.columns:
+                group_by_options.append("Period")
+            selected_group_by = st.radio(
+                "箱ひげ図のグループ化カラムを選択してください",
+                options=group_by_options,
+                index=0
+            )
+
             fig_box = px.box(
-                box_df, y="TradePricePerArea", x="DistrictName",
-                title="地区ごとの面積当たりの取引価格分布"
+                box_df, y="TradePricePerArea", x=selected_group_by,
+                title=f"{selected_group_by}ごとの面積当たりの取引価格分布"
             )
             st.plotly_chart(fig_box)
             
             # 時系列分析（Periodカラム）による箱ひげ図
             data_df = filtered_rel.df()
             if "Period" in data_df.columns:
-                available_districts = sorted(set(data_df["DistrictName"]))
-                default_index = available_districts.index("日本橋横山町") if "日本橋横山町" in available_districts else 0
-                selected_line_district = st.selectbox(
+                available_ts_districts = DEFAULT_DISTRICTS
+                selected_line_districts = st.multiselect(
                     "線グラフ用の地区を選択してください",
-                    options=available_districts,
-                    index=default_index
+                    options=available_ts_districts,
+                    default=["日本橋横山町", "東日本橋"]
                 )
-                line_rel = filtered_rel.filter(f"DistrictName = '{selected_line_district}'")
+                ts_rel = apply_in_filter(filtered_rel, "DistrictName", selected_line_districts)
+
                 if "FloorPlan" in rel.columns:
                     unique_line_floorplans = get_unique_values(filtered_rel, "FloorPlan")
                     selected_line_floorplans = st.multiselect(
@@ -206,7 +232,8 @@ def plot_tradeprice_area_charts(rel):
                         options=unique_line_floorplans,
                         default=unique_line_floorplans
                     )
-                    line_rel = apply_in_filter(line_rel, "FloorPlan", selected_line_floorplans)
+                    ts_rel = apply_in_filter(ts_rel, "FloorPlan", selected_line_floorplans)
+
                 if "Structure" in rel.columns:
                     unique_line_structures = get_unique_values(filtered_rel, "Structure")
                     selected_line_structures = st.multiselect(
@@ -214,17 +241,18 @@ def plot_tradeprice_area_charts(rel):
                         options=unique_line_structures,
                         default=unique_line_structures
                     )
-                    line_rel = apply_in_filter(line_rel, "Structure", selected_line_structures)
-                line_rel = line_rel.order("Period")
-                line_df = line_rel.df()
+                    ts_rel = apply_in_filter(ts_rel, "Structure", selected_line_structures)
+
+                ts_rel = ts_rel.order("Period")
+                line_df = ts_rel.df()
                 if not line_df.empty:
-                    fig_line = px.box(
-                        line_df, x="Period", y="TradePricePerArea",
-                        title=f"地区ごとの面積当たりの取引価格の時系列分布 ({selected_line_district})"
+                    fig_time_series = px.box(
+                        line_df, x="Period", y="TradePricePerArea", color="DistrictName",
+                        title=f"地区ごとの面積当たりの取引価格の時系列分布 ({', '.join(selected_line_districts)})"
                     )
-                    st.plotly_chart(fig_line)
+                    st.plotly_chart(fig_time_series)
                 else:
-                    st.info(f"'{selected_line_district}' のデータがありません。")
+                    st.info(f"選択された地区({', '.join(selected_line_districts)})のデータがありません。")
             else:
                 st.info("データに 'Period' カラムが見つかりません。")
         else:
