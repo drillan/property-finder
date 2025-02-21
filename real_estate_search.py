@@ -1,17 +1,16 @@
 from pathlib import Path
 
 import duckdb
-import pandas as pd
 import streamlit as st
 
 import search_params  # 追加: search_paramsモジュールのインポート
 
 data_dir = Path(__file__).parent / "data"
-data_file = str(data_dir / "data.parquet")
+data_file = data_dir / "data.parquet"
 
 
 def load_data() -> duckdb.DuckDBPyRelation:
-    return duckdb.sql(f"SELECT * FROM read_parquet('{data_file}')")
+    return duckdb.sql(f"SELECT * FROM read_parquet('{data_file.as_posix()}')")
 
 
 @st.fragment
@@ -22,7 +21,9 @@ def init() -> None:
 
 @st.fragment
 def search():
-    params = search_params.render_search_parameters()  # パラメータを別モジュールから取得
+    params = (
+        search_params.render_search_parameters()
+    )  # パラメータを別モジュールから取得
     if st.button("Search"):
         conditions = []
         filter_count = 0
@@ -83,21 +84,27 @@ def search():
                 filter_count += 1
 
         # 日付フィルタ
-        if params.get("fr_date") != "2010-03-31" and params.get("to_date") != "2024-06-30":
-            conditions.append(f"Period >= '{params['fr_date']}' AND Period <= '{params['to_date']}'")
+        if (
+            params.get("fr_date") != "2010-03-31"
+            and params.get("to_date") != "2024-06-30"
+        ):
+            conditions.append(
+                f"Period >= '{params['fr_date']}' AND Period <= '{params['to_date']}'"
+            )
             filter_count += 1
 
-        # ベースとなるクエリ生成（全件取得）
-        base_query = f"SELECT * FROM read_parquet('{data_file}')"
-        # 条件がある場合はWHERE句を追加
+        # ベースとなるリレーション生成（全件取得）
+        base_relation = duckdb.sql(
+            f"SELECT * FROM read_parquet('{data_file.as_posix()}')"
+        )
         if conditions:
-            full_query = base_query + " WHERE " + " AND ".join(conditions)
+            combined_conditions = " AND ".join(conditions)
+            filtered_relation = base_relation.filter(combined_conditions)
         else:
-            full_query = base_query
+            filtered_relation = base_relation
 
-        filtered_data = duckdb.sql(full_query)
         st.write(f"フィルタ数: {filter_count}")
-        st.dataframe(filtered_data.to_df())
+        st.dataframe(filtered_relation.to_df())
 
 
 # --- ここから変更: real_estate_search_page関数の追加 ---
@@ -105,7 +112,7 @@ def real_estate_search_page():
     """
     メインから呼び出す不動産検索ページの表示関数です。
     """
-    init()   # タイトル表示、データ読み込み
+    init()  # タイトル表示、データ読み込み
     search()  # 検索機能の実行
 
 
