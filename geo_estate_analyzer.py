@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 import folium
 import streamlit as st
+from folium import plugins
 from streamlit_folium import st_folium
 
 
@@ -18,8 +19,8 @@ def geo_estate_analyzer():
         # ズームレベルのスライダー
         zoom_level = st.slider(
             "ズームレベル",
-            min_value=10,
-            max_value=18,
+            min_value=10,  # より広域から
+            max_value=18,  # より詳細まで
             value=14,
             help="地図のズームレベルを選択"
         )
@@ -44,8 +45,29 @@ def geo_estate_analyzer():
     m = folium.Map(
         location=[35.691953, 139.781719],
         zoom_start=zoom_level,
-        control_scale=True  # スケールを表示
+        control_scale=True,  # スケールを表示
+        zoom_control=True    # ズームコントロールを表示
     )
+
+    # MarkerClusterを作成
+    marker_cluster = folium.plugins.MarkerCluster(
+        options={
+            'maxClusterRadius': 30,  # クラスター化する距離の閾値を小さく
+            'disableClusteringAtZoom': 16,  # より高いズームレベルでクラスター化を無効化
+            'spiderfyOnMaxZoom': True,  # 最大ズーム時にマーカーを展開表示
+            'showCoverageOnHover': True,  # クラスターの範囲を表示
+            'zoomToBoundsOnClick': True  # クリック時にクラスター内のマーカーが見えるようにズーム
+        }
+    ).add_to(m)
+
+    # 既存のマーカーを表示
+    if 'markers' in st.session_state:
+        for marker_data in st.session_state.markers:
+            folium.Marker(
+                location=[marker_data['lat'], marker_data['lng']],
+                popup=folium.Popup(marker_data['popup'], max_width=300),
+                icon=folium.Icon(color='red', icon='info-sign')
+            ).add_to(marker_cluster)  # マーカーをクラスターに追加
 
     # 地図の表示とクリックイベントの取得
     map_data = st_folium(
@@ -53,7 +75,8 @@ def geo_estate_analyzer():
         height=600,
         width="100%",
         returned_objects=["last_clicked"],
-        key="map"
+        key="map",
+        use_container_width=True
     )
 
     # クリックイベントの処理
@@ -84,7 +107,45 @@ def geo_estate_analyzer():
                 from_date=from_date,  # 四半期コード（例：20101）
                 to_date=to_date      # 四半期コード（例：20234）
             )
+            
+            # GeoJSONデータをJSONとして表示
             st.json(geojson_data)
+
+            # セッション状態にマーカー情報を初期化
+            if 'markers' not in st.session_state:
+                st.session_state.markers = []
+
+            # GeoJSONの各フィーチャーをマーカーとして追加
+            if isinstance(geojson_data, dict) and 'features' in geojson_data:
+                for feature in geojson_data['features']:
+                    if feature['geometry']['type'] == 'Point':
+                        lng, lat = feature['geometry']['coordinates']
+                        properties = feature['properties']
+                        
+                        # プロパティから表示用のポップアップ内容を作成
+                        popup_content = '<br>'.join([
+                            f"<b>{k}</b>: {v}" for k, v in properties.items()
+                        ])
+                        
+                        # マーカー情報をセッションに保存
+                        marker_info = {
+                            'lat': lat,
+                            'lng': lng,
+                            'popup': popup_content
+                        }
+                        if marker_info not in st.session_state.markers:
+                            st.session_state.markers.append(marker_info)
+                            # 新しいマーカーを地図に直接追加
+                            folium.Marker(
+                                location=[lat, lng],
+                                popup=folium.Popup(popup_content, max_width=300),
+                                icon=folium.Icon(color='red', icon='info-sign')
+                            ).add_to(marker_cluster)  # マーカーをクラスターに追加
+                
+                # 地図を再読み込みするためのボタン
+                if st.button('マーカーを更新'):
+                    st.experimental_rerun()
+
         except Exception as e:
             st.error(f"GeoJsonデータの取得中にエラーが発生しました: {str(e)}")
 
