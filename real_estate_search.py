@@ -1,9 +1,11 @@
 from pathlib import Path
+from typing import Optional
 
 import duckdb
 import streamlit as st
 
 import search_params  # 追加: search_paramsモジュールのインポート
+from base_analyzer import BaseAnalyzer
 
 data_dir = Path(__file__).parent / "data"
 data_file = data_dir / "data.parquet"
@@ -114,6 +116,50 @@ def real_estate_search_page():
     """
     init()  # タイトル表示、データ読み込み
     search()  # 検索機能の実行
+
+
+class SearchAnalyzer(BaseAnalyzer):
+    """検索機能クラス"""
+    
+    def _build_or_condition(self, col_name: str, items: list) -> Optional[str]:
+        """OR条件の生成"""
+        if not items:
+            return None
+        if len(items) == 1:
+            return f"{col_name} = '{items[0]}'"
+        return "(" + " OR ".join([f"{col_name} = '{item}'" for item in items]) + ")"
+
+    def _build_range_condition(self, col_name: str, value: tuple, default: tuple) -> Optional[str]:
+        """範囲条件の生成"""
+        if value != default:
+            return f"{col_name} >= {value[0]} AND {col_name} <= {value[1]}"
+        return None
+
+    def run(self):
+        """検索機能の実行"""
+        st.title("不動産データ検索")
+        
+        params = search_params.render_search_parameters()
+        if not st.button("Search"):
+            return
+            
+        conditions = []
+        filter_count = 0
+        
+        # ... 検索条件の構築 ...
+        
+        base_relation = self._load_data()
+        if base_relation is None:
+            return
+            
+        if conditions:
+            combined_conditions = " AND ".join(conditions)
+            filtered_relation = base_relation.filter(combined_conditions)
+        else:
+            filtered_relation = base_relation
+
+        st.write(f"フィルタ数: {filter_count}")
+        st.dataframe(filtered_relation.to_df())
 
 
 if __name__ == "__main__":

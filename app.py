@@ -1,8 +1,8 @@
 import streamlit as st
 
-from data_analysis import data_analysis_page
-from geo_estate_analyzer import geo_estate_analyzer
-from real_estate_search import real_estate_search_page
+from data_analysis import DataAnalyzer
+from geo_estate_analyzer import GeoEstateAnalyzer
+from real_estate_search import SearchAnalyzer
 
 
 def home_page():
@@ -10,18 +10,16 @@ def home_page():
     st.markdown("""このアプリケーションは [不動産情報ライブラリ](https://www.reinfolib.mlit.go.jp/) から取得したデータを利用しています。""")
     st.write("左のサイドバーから目的のページを選択してください。")
 
-# サイドバーにページ選択用のラジオボタンを作成
-pages = {
-    "トップページ": home_page,
-    "データ検索": real_estate_search_page,
-    "データ分析": data_analysis_page,
-    "位置情報によるデータ分析": geo_estate_analyzer
-}
+def main():
+    pages = {
+        "トップページ": home_page,
+        "データ検索": lambda: SearchAnalyzer().run(),
+        "データ分析": lambda: DataAnalyzer().run(),
+        "位置情報によるデータ分析": lambda: GeoEstateAnalyzer().run()
+    }
 
-page = st.sidebar.radio("ページ選択", list(pages.keys()))
-
-# 選択されたページの関数を呼び出して表示
-pages[page]()
+    page = st.sidebar.radio("ページ選択", list(pages.keys()))
+    pages[page]()
 
 if __name__ == "__main__":
-    home_page() 
+    main() 
