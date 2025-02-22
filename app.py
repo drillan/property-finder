@@ -21,4 +21,7 @@ pages = {
 page = st.sidebar.radio("ページ選択", list(pages.keys()))
 
 # 選択されたページの関数を呼び出して表示
-pages[page]() 
+pages[page]()
+
+if __name__ == "__main__":
+    home_page() 
