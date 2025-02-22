@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -199,6 +200,113 @@ class GeoJsonDownloader:
         except RequestException as e:
             logger.error(f"Failed to fetch GeoJSON data: {e}")
             raise
+
+class GeoJsonProcessor:
+    """GeoJSONデータを処理してDataFrameに変換するクラス"""
+    
+    @staticmethod
+    def _convert_price(price_str: str) -> float:
+        """価格文字列を数値に変換（例：'1,300万円' -> 13000000.0）
+        
+        Args:
+            price_str: 価格文字列（例：'1,300万円'）
+            
+        Returns:
+            float: 変換後の数値
+        """
+        try:
+            # カンマと'万円'を除去
+            cleaned = price_str.replace(',', '').replace('万円', '')
+            if not cleaned:
+                return np.nan
+            return float(cleaned) * 10000
+        except (ValueError, AttributeError):
+            return np.nan
+
+    @staticmethod
+    def _convert_area(area_str: str) -> float:
+        """面積文字列を数値に変換（例：'15㎡' -> 15.0）
+        
+        Args:
+            area_str: 面積文字列（例：'15㎡'）
+            
+        Returns:
+            float: 変換後の数値
+        """
+        try:
+            # '㎡'を除去
+            cleaned = area_str.replace('㎡', '')
+            if not cleaned:
+                return np.nan
+            return float(cleaned)
+        except (ValueError, AttributeError):
+            return np.nan
+
+    def process_geojson(self, geojson_data: dict) -> pd.DataFrame:
+        """GeoJSONデータをDataFrameに変換
+        
+        Args:
+            geojson_data: GeoJSONデータ
+            
+        Returns:
+            pd.DataFrame: 変換後のDataFrame
+        """
+        features = geojson_data.get('features', [])
+        processed_data = []
+        
+        for feature in features:
+            properties = feature.get('properties', {})
+            coordinates = feature.get('geometry', {}).get('coordinates', [])
+            
+            # 価格と面積を先に計算
+            price = self._convert_price(properties.get('u_transaction_price_total_ja', ''))
+            area = self._convert_area(properties.get('u_area_ja', ''))
+            
+            # 単位面積あたりの価格を計算（どちらかがnanの場合はnanになる）
+            price_per_area = np.nan if pd.isna(price) or pd.isna(area) or area == 0 else price / area
+            
+            processed_feature = {
+                # 位置情報
+                'longitude': coordinates[0] if coordinates else np.nan,
+                'latitude': coordinates[1] if coordinates else np.nan,
+                
+                # 時期と地域情報
+                'period': properties.get('point_in_time_name_ja', ''),
+                'prefecture': properties.get('prefecture_name_ja', ''),
+                'city': properties.get('city_name_ja', ''),
+                'district': properties.get('district_name_ja', ''),
+                'city_code': properties.get('city_code', ''),
+                'district_code': properties.get('district_code', ''),
+                
+                # 取引情報
+                'price': price,
+                'area': area,
+                'price_per_area': price_per_area,  # 追加：単位面積あたりの価格
+                'price_per_sqm': properties.get('u_transaction_price_unit_price_square_meter_ja', ''),
+                'price_per_tsubo': properties.get('u_unit_price_per_tsubo_ja', ''),
+                'transaction_type': properties.get('transaction_contents_name_ja', ''),
+                
+                # 建物情報
+                'structure': properties.get('building_structure_name_ja', ''),
+                'floor_plan': properties.get('floor_plan_name_ja', ''),
+                'total_floor_area': properties.get('u_building_total_floor_area_ja', ''),
+                'construction_year': properties.get('u_construction_year_ja', ''),
+                
+                # 土地情報
+                'land_shape': properties.get('land_shape_name_ja', ''),
+                'land_frontage': properties.get('u_land_frontage_ja', ''),
+                
+                # 道路情報
+                'front_road_direction': properties.get('front_road_azimuth_name_ja', ''),
+                'front_road_width': properties.get('u_front_road_width_ja', ''),
+                'front_road_type': properties.get('front_road_type_name_ja', ''),
+                
+                # 取引カテゴリ
+                'price_category': properties.get('price_information_category_name_ja', '')
+            }
+            processed_data.append(processed_feature)
+            
+        return pd.DataFrame(processed_data)
 
 def main() -> None:
     """メイン処理"""

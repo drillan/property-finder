@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
 import folium
+import pandas as pd
+import plotly.express as px
 import streamlit as st
 from folium import plugins
 from streamlit_folium import st_folium
@@ -124,6 +126,31 @@ def geo_estate_analyzer():
             # GeoJSONデータをJSONとして表示
             st.json(geojson_data)
 
+            # GeoJSONデータをDataFrameに変換
+            from real_estate_data_processor import GeoJsonProcessor
+            processor = GeoJsonProcessor()
+            df = processor.process_geojson(geojson_data)
+
+            # 箱ひげ図の作成と表示
+            if not df.empty and not df['price_per_area'].isna().all():
+                fig = px.box(
+                    df,
+                    x='period',  # periodをx軸に設定
+                    y='price_per_area',
+                    title='期間ごとの単位面積あたりの価格分布',
+                    labels={
+                        'price_per_area': '単位面積あたりの価格（円/㎡）',
+                        'period': '期間'
+                    },
+                )
+                fig.update_layout(
+                    showlegend=False,
+                    height=400,
+                    margin=dict(t=50, b=50),
+                    xaxis_tickangle=45  # x軸のラベルを45度傾ける
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
             # セッション状態にマーカー情報を初期化
             if 'markers' not in st.session_state:
                 st.session_state.markers = []
