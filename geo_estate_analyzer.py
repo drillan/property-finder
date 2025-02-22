@@ -71,7 +71,7 @@ class GeoEstateAnalyzer:
     def run(self):
         """アプリケーションのメイン実行部分"""
         st.title("不動産データ分析マップ")
-        st.write("地図をクリックして緯度経度を取得")
+        st.write("地図をクリックして「物件を検索」をクリックしてください")
 
         # UI要素の表示
         render_location_inputs(st.session_state)
