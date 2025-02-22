@@ -203,6 +203,8 @@ class GeoJsonDownloader:
 def main() -> None:
     """メイン処理"""
     try:
+        st.title("不動産データ分析")
+        
         config = DataConfig()
         downloader = DataDownloader(config)
         formatter = DataFormatter(config)

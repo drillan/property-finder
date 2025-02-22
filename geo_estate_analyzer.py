@@ -7,15 +7,27 @@ from streamlit_folium import st_folium
 
 
 def geo_estate_analyzer():
-    st.title("地図クリックアプリ")
+    st.title("不動産データ分析マップ")
     st.write("地図をクリックして緯度経度を取得")
 
     # セッション状態の初期化
     if 'locations' not in st.session_state:
         st.session_state.locations = []
 
-    # サイドバーにコントロールを追加
-    with st.sidebar:
+    # リセットボタンを追加
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("マーカーをリセット", key="reset_button"):
+            st.session_state.markers = []
+            st.rerun()
+    with col2:
+        if st.button('マーカーを更新', key="update_button"):
+            st.rerun()
+
+    # コントロールをメインページに配置
+    col_zoom, col_quarter = st.columns(2)
+    
+    with col_zoom:
         # ズームレベルのスライダー
         zoom_level = st.slider(
             "ズームレベル",
@@ -25,12 +37,13 @@ def geo_estate_analyzer():
             help="地図のズームレベルを選択"
         )
 
+    with col_quarter:
         # 四半期の範囲スライダー
         current_year = datetime.now().year
         quarters = [f"{year}{quarter}" for year in range(2010, current_year + 1) 
                    for quarter in range(1, 5)]
         
-        default_from_idx = len(quarters) - 5  # デフォルトは直近5四半期前から
+        default_from_idx = len(quarters) - 12  # デフォルトは直近5四半期前から
         default_to_idx = len(quarters) - 1    # 最新の四半期まで
         
         selected_range = st.select_slider(
@@ -144,7 +157,7 @@ def geo_estate_analyzer():
                 
                 # 地図を再読み込みするためのボタン
                 if st.button('マーカーを更新'):
-                    st.experimental_rerun()
+                    st.rerun()
 
         except Exception as e:
             st.error(f"GeoJsonデータの取得中にエラーが発生しました: {str(e)}")
