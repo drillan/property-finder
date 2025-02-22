@@ -20,18 +20,14 @@ class GeoEstateAnalyzer:
         
     def _initialize_session_state(self):
         """セッション状態の初期化"""
-        if 'locations' not in st.session_state:
+        if 'locations' not in st.session_state or st.session_state.get('reset_clicked', False):
             st.session_state.locations = []
-        if 'input_lat' not in st.session_state:
             st.session_state.input_lat = 35.691953
-        if 'input_lng' not in st.session_state:
             st.session_state.input_lng = 139.781719
-        if 'geojson_data' not in st.session_state:
             st.session_state.geojson_data = None
-        if 'df' not in st.session_state:
             st.session_state.df = None
-        if 'markers' not in st.session_state:
             st.session_state.markers = []
+            st.session_state.reset_clicked = False
 
     def _handle_data_fetch(self, zoom_level, from_date, to_date):
         """データ取得処理"""
@@ -80,14 +76,15 @@ class GeoEstateAnalyzer:
         # UI要素の表示
         render_location_inputs(st.session_state)
         zoom_level, (from_date, to_date) = render_control_panel()
-        reset_clicked, fetch_clicked = render_action_buttons()
+        clear_data_clicked, search_clicked = render_action_buttons()
 
         # アクションの処理
-        if reset_clicked:
+        if clear_data_clicked:
+            st.session_state.reset_clicked = True
             self._initialize_session_state()
             st.rerun()
         
-        if fetch_clicked:
+        if search_clicked:
             self._handle_data_fetch(zoom_level, from_date, to_date)
 
         # データの表示

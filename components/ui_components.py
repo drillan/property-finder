@@ -58,16 +58,10 @@ def render_control_panel():
     return zoom_level, selected_range
 
 def render_action_buttons():
-    """アクションボタンを表示"""
+    """アクションボタンの表示"""
     col1, col2 = st.columns(2)
-    reset_clicked = False
-    fetch_clicked = False
-    
     with col1:
-        if st.button("データをリセット", key="reset_button"):
-            reset_clicked = True
+        clear_data = st.button("データをクリア", type="secondary")
     with col2:
-        if st.button('データを取得', key="fetch_button"):
-            fetch_clicked = True
-            
-    return reset_clicked, fetch_clicked 
+        search = st.button("物件を検索", type="primary")
+    return clear_data, search 
