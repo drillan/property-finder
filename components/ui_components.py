@@ -34,8 +34,8 @@ def render_control_panel():
     with col_zoom:
         zoom_level = st.slider(
             "ズームレベル",
-            min_value=10,
-            max_value=18,
+            min_value=11,
+            max_value=15,
             value=14,
             help="地図のズームレベルを選択"
         )
