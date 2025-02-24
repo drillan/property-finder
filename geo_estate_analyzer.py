@@ -46,7 +46,6 @@ class GeoEstateAnalyzer:
             processor = GeoJsonProcessor()
             st.session_state.df = processor.process_geojson(st.session_state.geojson_data)
             self._update_markers()
-            st.rerun()
 
         except Exception as e:
             st.error(f"データの取得中にエラーが発生しました: {str(e)}")
@@ -82,8 +81,7 @@ class GeoEstateAnalyzer:
         if clear_data_clicked:
             st.session_state.reset_clicked = True
             self._initialize_session_state()
-            st.rerun()
-        
+
         if search_clicked:
             self._handle_data_fetch(zoom_level, from_date, to_date)
 
@@ -94,7 +92,41 @@ class GeoEstateAnalyzer:
     def _display_data(self):
         """データとグラフの表示"""
         if st.session_state.geojson_data is not None:
-            st.json(st.session_state.geojson_data)
+            # GeoJSONデータをテーブル形式で表示
+            if st.session_state.df is not None and not st.session_state.df.empty:
+                st.subheader("検索結果")
+                
+                # 利用可能な列を確認
+                available_columns = [
+                    'period',
+                    'price',
+                    'area',
+                    'price_per_area'
+                ]
+                
+                # 列名を日本語に変換
+                column_names = {
+                    'period': '期間',
+                    'price': '価格（万円）',
+                    'area': '面積（㎡）',
+                    'price_per_area': '単価（万円/㎡）'
+                }
+                
+                # 表示するデータフレームを整形
+                display_df = st.session_state.df[available_columns].copy()
+                display_df = display_df.rename(columns=column_names)
+                
+                # 数値データを整形
+                if 'price' in st.session_state.df.columns:
+                    display_df['価格（万円）'] = display_df['価格（万円）'].round(0).astype(int)
+                if 'price_per_area' in st.session_state.df.columns:
+                    display_df['単価（万円/㎡）'] = display_df['単価（万円/㎡）'].round(1)
+                
+                st.dataframe(
+                    display_df,
+                    hide_index=True,
+                    use_container_width=True
+                )
 
             if (st.session_state.df is not None and 
                 not st.session_state.df.empty and 
@@ -175,7 +207,6 @@ class GeoEstateAnalyzer:
         if map_data['last_clicked']:
             st.session_state.input_lat = map_data['last_clicked']['lat']
             st.session_state.input_lng = map_data['last_clicked']['lng']
-            st.rerun()
 
 def geo_estate_analyzer():
     """アプリケーションのエントリーポイント"""
