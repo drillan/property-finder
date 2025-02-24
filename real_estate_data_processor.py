@@ -5,7 +5,7 @@ import time
 import unicodedata
 from dataclasses import dataclass, field
 from itertools import product
-from math import cos, floor, log, pi, radians, sin, tan
+from math import atan, cos, degrees, floor, log, pi, radians, sin, sinh, tan
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -162,6 +162,31 @@ class GeoJsonDownloader:
         x = floor(n * ((lon + 180) / 360))
         y = floor(n * (1 - (log(tan(lat_rad) + 1 / cos(lat_rad)) / pi)) / 2)
         return x, y
+
+    @staticmethod
+    def tile_to_latlon(x: int, y: int, zoom: int) -> Tuple[float, float]:
+        """タイル座標を緯度経度に変換"""
+        n = 2**zoom
+        lon = x / n * 360 - 180
+        lat_rad = atan(sinh(pi * (1 - 2 * y / n)))
+        lat = degrees(lat_rad)
+        return lat, lon
+
+    @staticmethod
+    def get_tile_bounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
+        """タイル座標から緯度経度の範囲を取得
+        
+        Args:
+            x: タイルのX座標
+            y: タイルのY座標
+            zoom: ズームレベル
+            
+        Returns:
+            Tuple[float, float, float, float]: (南端緯度, 西端経度, 北端緯度, 東端経度)
+        """
+        south, west = GeoJsonDownloader.tile_to_latlon(x, y + 1, zoom)
+        north, east = GeoJsonDownloader.tile_to_latlon(x + 1, y, zoom)
+        return south, west, north, east
 
     def get_geojson(
         self, 

@@ -1,0 +1,129 @@
+---
+description: 
+globs: 
+---
+
+# Git Commit Message Guidelines
+
+## Introduction:
+
+A well-structured Git commit message is essential for maintaining a clear and useful project history. These guidelines will help you create consistent, readable, and meaningful commit messages.
+
+## Basic Structure:
+
+```text
+<type>: <subject>
+
+[optional body]
+
+[optional footer]
+
+## Type Categories:
+
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation changes
+- style: Code style changes
+- refactor: Code refactoring
+- perf: Performance improvements
+- test: Testing changes
+- chore: Build process or auxiliary tool changes
+
+## Subject Line Requirements:
+
+- Maximum 50 characters
+- Start with a capital letter
+- Use imperative mood ("Add" not "Added")
+- No period at the end
+- Format: <type>: <description>
+
+## Message Body Guidelines:
+
+- Separate from subject with a blank line
+- Wrap text at 72 characters
+- Explain the "what" and "why" (not "how")
+- Use proper paragraphing
+- Include context and background
+
+## Footer Guidelines:
+
+- Reference issues: Fixes #123 or Closes #456
+- Breaking changes:
+
+```
+BREAKING CHANGE: <description>
+[optional migration instructions]
+```
+
+- Co-authors:
+
+```
+Co-authored-by: Name <email@example.com>
+```
+
+## Best Practices Examples:
+
+- Feature Addition:
+
+```
+feat: implement OAuth2 authentication
+
+Add OAuth2 support for enhanced security and third-party
+login capabilities. This includes:
+- Configuration setup
+- Token validation
+- Session management
+
+Closes #456
+```
+
+- Bug Fix:
+
+```
+fix: resolve null pointer in user authentication
+
+Previous implementation didn't check for null values
+in the authentication chain, causing crashes during
+concurrent access.
+
+Fixes #789
+```
+
+## Common Mistakes to Avoid:
+
+- Vague messages ("fix stuff", "update code")
+- Multiple unrelated changes in one commit
+- Technical implementation details in subject
+- Past tense usage
+- Missing context in complex changes
+
+## Additional Considerations:
+
+### Atomic Commits:
+
+- Each commit should represent one logical change
+- Makes review, testing, and reverting easier
+- Helps maintain clear project history
+
+### Review Process:
+
+- Test changes before committing
+- Review your commit message
+- Consider your audience (other developers and future self)
+
+### Issue Tracking Integration:
+
+- Use standard keywords (Fixes, Closes, Resolves)
+- Reference relevant issues consistently
+- Follow project-specific conventions
+
+
+### By following these guidelines, you'll create a Git history that is:
+
+- Easy to understand and navigate
+- Useful for debugging and review
+- Valuable for generating changelogs
+- Helpful for project maintenance
+
+Remember: A well-written commit message is an investment in your project's future maintainability and collaboration efficiency.
+

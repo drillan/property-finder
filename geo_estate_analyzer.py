@@ -127,6 +127,22 @@ class GeoEstateAnalyzer:
             zoom_control=True
         )
 
+        # タイル範囲の矩形を表示
+        from real_estate_data_processor import GeoJsonDownloader
+        downloader = GeoJsonDownloader()
+        x, y = downloader.latlon_to_tile(st.session_state.input_lat, st.session_state.input_lng, zoom_level)
+        south, west, north, east = downloader.get_tile_bounds(x, y, zoom_level)
+        
+        # 矩形の座標を設定
+        bounds = [[south, west], [north, east]]
+        folium.Rectangle(
+            bounds=bounds,
+            color='red',
+            weight=2,
+            fill=False,
+            popup=f'Tile: x={x}, y={y}, zoom={zoom_level}'
+        ).add_to(m)
+
         marker_cluster = folium.plugins.MarkerCluster(
             options={
                 'maxClusterRadius': 30,
