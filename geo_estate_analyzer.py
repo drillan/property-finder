@@ -27,6 +27,8 @@ class GeoEstateAnalyzer:
             st.session_state.input_lng = 139.781719
             st.session_state.geojson_data = None
             st.session_state.df = None
+            st.session_state.filtered_df = None
+            st.session_state.filtered_geojson = None
             st.session_state.markers = []
             st.session_state.reset_clicked = False
             st.session_state.selected_price_category = "すべて"  # 価格区分の初期値
@@ -39,10 +41,12 @@ class GeoEstateAnalyzer:
         with col1:
             # 価格情報区分のオプション
             price_categories = ["すべて", "不動産取引価格情報", "成約価格情報"]
+            # 値変更時に処理を実行しないよう、key パラメータを追加
             st.session_state.selected_price_category = st.selectbox(
                 "価格情報区分",
                 options=price_categories,
-                index=price_categories.index(st.session_state.get("selected_price_category", "すべて"))
+                index=price_categories.index(st.session_state.get("selected_price_category", "すべて")),
+                key="price_category_select"
             )
         
         with col2:
@@ -56,10 +60,12 @@ class GeoEstateAnalyzer:
                 "1LD+S", "5DK", "5K", "6LDK", "5LDK+S", "3K+S", "6LDK+S"
             ]
             
+            # 値変更時に処理を実行しないよう、key パラメータを追加
             st.session_state.selected_floor_plan = st.selectbox(
                 "間取り",
                 options=floor_plans,
-                index=floor_plans.index(st.session_state.get("selected_floor_plan", "すべて"))
+                index=floor_plans.index(st.session_state.get("selected_floor_plan", "すべて")),
+                key="floor_plan_select"
             )
 
     def _handle_data_fetch(self, zoom_level, from_date, to_date):
@@ -79,7 +85,7 @@ class GeoEstateAnalyzer:
             processor = GeoJsonProcessor()
             st.session_state.df = processor.process_geojson(st.session_state.geojson_data)
             
-            # フィルタリングを適用
+            # データ取得後にフィルタリングを適用
             self._apply_filters()
             
             self._update_markers()
@@ -179,16 +185,37 @@ class GeoEstateAnalyzer:
         
         clear_data_clicked, search_clicked = render_action_buttons()
 
+        # メイン処理実行有無のフラグをセッションに記録
+        if "should_process_data" not in st.session_state:
+            st.session_state.should_process_data = False
+
         # アクションの処理
         if clear_data_clicked:
             st.session_state.reset_clicked = True
+            st.session_state.should_process_data = False
             self._initialize_session_state()
+            st.rerun()  # 状態をクリアするために再実行
 
         if search_clicked:
-            self._handle_data_fetch(zoom_level, from_date, to_date)
-
-        # データの表示
-        self._display_data()
+            # 検索ボタンクリック時にフラグを設定
+            st.session_state.should_process_data = True
+        
+        # フラグがオンの場合のみデータ処理を実行    
+        if st.session_state.should_process_data and st.session_state.geojson_data is None:
+            with st.spinner("データを検索中..."):
+                self._handle_data_fetch(zoom_level, from_date, to_date)
+        
+        # 既存のデータがある場合は再フィルタリングのみ適用
+        elif st.session_state.should_process_data and st.session_state.geojson_data is not None:
+            if search_clicked:
+                with st.spinner("データを更新中..."):
+                    self._handle_data_fetch(zoom_level, from_date, to_date)
+        
+        # データの表示（データがある場合のみ）
+        if st.session_state.should_process_data:
+            self._display_data()
+        
+        # 地図は常に表示
         self._display_map(zoom_level)
 
     def _display_data(self):
