@@ -101,7 +101,9 @@ class GeoEstateAnalyzer:
                     'period',
                     'price',
                     'area',
-                    'price_per_area'
+                    'price_per_area',
+                    'price_category',  # 価格帯の列を追加
+                    'floor_plan'       # 間取りの列を追加
                 ]
                 
                 # 列名を日本語に変換
@@ -109,7 +111,9 @@ class GeoEstateAnalyzer:
                     'period': '期間',
                     'price': '価格（万円）',
                     'area': '面積（㎡）',
-                    'price_per_area': '単価（万円/㎡）'
+                    'price_per_area': '単価（万円/㎡）',
+                    'price_category': '価格帯',  # 価格帯の日本語名
+                    'floor_plan': '間取り'       # 間取りの日本語名
                 }
                 
                 # 表示するデータフレームを整形
