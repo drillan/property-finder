@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import datetime, timedelta
 
 import folium
@@ -28,6 +29,38 @@ class GeoEstateAnalyzer:
             st.session_state.df = None
             st.session_state.markers = []
             st.session_state.reset_clicked = False
+            st.session_state.selected_price_category = "すべて"  # 価格区分の初期値
+            st.session_state.selected_floor_plan = "すべて"      # 間取りの初期値
+
+    def _display_filter_options(self):
+        """価格区分と間取りのフィルタリングオプションを表示"""
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 価格情報区分のオプション
+            price_categories = ["すべて", "不動産取引価格情報", "成約価格情報"]
+            st.session_state.selected_price_category = st.selectbox(
+                "価格情報区分",
+                options=price_categories,
+                index=price_categories.index(st.session_state.get("selected_price_category", "すべて"))
+            )
+        
+        with col2:
+            # 間取りのオプション
+            floor_plans = ["すべて", 
+                "1R", "1K", "1LDK", "2LDK", "3DK", "3LDK", "2DK", "1DK", 
+                "1LDK+S", "オープンフロア", "2K", "4LDK", "2LDK+S", 
+                "スタジオ", "1DK+S", "2DK+S", "4DK+S", "3LDK+S", "3K", 
+                "4LDK+S", "5LDK", "4DK", "3DK+S", "メゾネット", "1K+S", 
+                "3LK", "1LK", "2K+S", "1R+S", "7LDK", "2LK+S", "4K", 
+                "1LD+S", "5DK", "5K", "6LDK", "5LDK+S", "3K+S", "6LDK+S"
+            ]
+            
+            st.session_state.selected_floor_plan = st.selectbox(
+                "間取り",
+                options=floor_plans,
+                index=floor_plans.index(st.session_state.get("selected_floor_plan", "すべて"))
+            )
 
     def _handle_data_fetch(self, zoom_level, from_date, to_date):
         """データ取得処理"""
@@ -45,16 +78,81 @@ class GeoEstateAnalyzer:
 
             processor = GeoJsonProcessor()
             st.session_state.df = processor.process_geojson(st.session_state.geojson_data)
+            
+            # フィルタリングを適用
+            self._apply_filters()
+            
             self._update_markers()
 
         except Exception as e:
             st.error(f"データの取得中にエラーが発生しました: {str(e)}")
 
+    def _apply_filters(self):
+        """選択された価格区分と間取りに基づいてデータをフィルタリング"""
+        if st.session_state.df is None or st.session_state.df.empty:
+            return
+        
+        filtered_df = st.session_state.df.copy()
+        
+        # 価格情報区分フィルター
+        if st.session_state.selected_price_category != "すべて":
+            filtered_df = filtered_df[filtered_df['price_category'] == st.session_state.selected_price_category]
+        
+        # 間取りフィルター (正規化して比較)
+        if st.session_state.selected_floor_plan != "すべて":
+            # 選択された間取りを正規化
+            normalized_selection = unicodedata.normalize('NFKC', st.session_state.selected_floor_plan)
+            # 各値を正規化して比較
+            filtered_df = filtered_df[filtered_df['floor_plan'].apply(
+                lambda x: unicodedata.normalize('NFKC', x) == normalized_selection
+            )]
+        
+        # フィルタリングされたデータフレームを保存
+        st.session_state.filtered_df = filtered_df
+        
+        # GeoJSONのフィルタリング（マーカー表示用）
+        if isinstance(st.session_state.geojson_data, dict) and 'features' in st.session_state.geojson_data:
+            filtered_features = []
+            
+            # 選択された間取りを正規化
+            normalized_floor_plan = unicodedata.normalize('NFKC', st.session_state.selected_floor_plan) if st.session_state.selected_floor_plan != "すべて" else None
+            
+            for feature in st.session_state.geojson_data['features']:
+                include_feature = True
+                properties = feature.get('properties', {})
+                
+                # 価格情報区分フィルター
+                if st.session_state.selected_price_category != "すべて":
+                    if properties.get('price_information_category_name_ja') != st.session_state.selected_price_category:
+                        include_feature = False
+                
+                # 間取りフィルター (正規化して比較)
+                if st.session_state.selected_floor_plan != "すべて":
+                    feature_floor_plan = properties.get('floor_plan_name_ja', '')
+                    if feature_floor_plan:
+                        normalized_feature_floor_plan = unicodedata.normalize('NFKC', feature_floor_plan)
+                        if normalized_feature_floor_plan != normalized_floor_plan:
+                            include_feature = False
+                    else:
+                        include_feature = False
+                
+                if include_feature:
+                    filtered_features.append(feature)
+            
+            # フィルタリングされたGeoJSONを保存
+            filtered_geojson = st.session_state.geojson_data.copy()
+            filtered_geojson['features'] = filtered_features
+            st.session_state.filtered_geojson = filtered_geojson
+        else:
+            st.session_state.filtered_geojson = st.session_state.geojson_data
+
     def _update_markers(self):
         """マーカー情報の更新"""
-        if isinstance(st.session_state.geojson_data, dict) and 'features' in st.session_state.geojson_data:
+        geojson_data = st.session_state.get('filtered_geojson', st.session_state.geojson_data)
+        
+        if isinstance(geojson_data, dict) and 'features' in geojson_data:
             st.session_state.markers = []
-            for feature in st.session_state.geojson_data['features']:
+            for feature in geojson_data['features']:
                 if feature['geometry']['type'] == 'Point':
                     lng, lat = feature['geometry']['coordinates']
                     properties = feature['properties']
@@ -75,6 +173,10 @@ class GeoEstateAnalyzer:
         # UI要素の表示
         render_location_inputs(st.session_state)
         zoom_level, (from_date, to_date) = render_control_panel()
+        
+        # フィルタリングオプションの表示
+        self._display_filter_options()
+        
         clear_data_clicked, search_clicked = render_action_buttons()
 
         # アクションの処理
@@ -92,8 +194,10 @@ class GeoEstateAnalyzer:
     def _display_data(self):
         """データとグラフの表示"""
         if st.session_state.geojson_data is not None:
-            # GeoJSONデータをテーブル形式で表示
-            if st.session_state.df is not None and not st.session_state.df.empty:
+            # フィルタリングされたデータフレームを使用
+            display_df = st.session_state.get('filtered_df', st.session_state.df)
+            
+            if display_df is not None and not display_df.empty:
                 st.subheader("検索結果")
                 
                 # 利用可能な列を確認
@@ -117,27 +221,30 @@ class GeoEstateAnalyzer:
                 }
                 
                 # 表示するデータフレームを整形
-                display_df = st.session_state.df[available_columns].copy()
-                display_df = display_df.rename(columns=column_names)
+                display_columns = [col for col in available_columns if col in display_df.columns]
+                formatted_df = display_df[display_columns].copy()
+                formatted_df = formatted_df.rename(columns={col: column_names.get(col, col) for col in display_columns})
                 
                 # 数値データを整形
-                if 'price' in st.session_state.df.columns:
-                    display_df['価格（万円）'] = display_df['価格（万円）'].round(0).astype(int)
-                if 'price_per_area' in st.session_state.df.columns:
-                    display_df['単価（万円/㎡）'] = display_df['単価（万円/㎡）'].round(1)
+                if 'price' in display_df.columns:
+                    formatted_df['価格（万円）'] = formatted_df['価格（万円）'].round(0).astype(int)
+                if 'price_per_area' in display_df.columns:
+                    formatted_df['単価（万円/㎡）'] = formatted_df['単価（万円/㎡）'].round(1)
                 
                 st.dataframe(
-                    display_df,
+                    formatted_df,
                     hide_index=True,
                     use_container_width=True
                 )
 
-            if (st.session_state.df is not None and 
-                not st.session_state.df.empty and 
-                not st.session_state.df['price_per_area'].isna().all()):
+            # グラフ表示（フィルタリングされたデータを使用）
+            if (display_df is not None and 
+                not display_df.empty and 
+                'price_per_area' in display_df.columns and
+                not display_df['price_per_area'].isna().all()):
                 
                 fig = px.box(
-                    st.session_state.df,
+                    display_df,
                     x='period',
                     y='price_per_area',
                     title='期間ごとの単位面積あたりの価格分布',
