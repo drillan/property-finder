@@ -32,7 +32,7 @@ class GeoEstateAnalyzer:
             st.session_state.markers = []
             st.session_state.reset_clicked = False
             st.session_state.selected_price_category = "すべて"  # 価格区分の初期値
-            st.session_state.selected_floor_plan = "すべて"      # 間取りの初期値
+            st.session_state.selected_floor_plans = ["すべて"]  # 間取りの初期値（リストに変更）
 
     def _display_filter_options(self):
         """価格区分と間取りのフィルタリングオプションを表示"""
@@ -60,13 +60,21 @@ class GeoEstateAnalyzer:
                 "1LD+S", "5DK", "5K", "6LDK", "5LDK+S", "3K+S", "6LDK+S"
             ]
             
-            # 値変更時に処理を実行しないよう、key パラメータを追加
-            st.session_state.selected_floor_plan = st.selectbox(
-                "間取り",
+            # デフォルト値の取得
+            default_floor_plans = st.session_state.get("selected_floor_plans", ["すべて"])
+            
+            # multiselectを使用して複数選択を可能にする
+            st.session_state.selected_floor_plans = st.multiselect(
+                "間取り（複数選択可）",
                 options=floor_plans,
-                index=floor_plans.index(st.session_state.get("selected_floor_plan", "すべて")),
-                key="floor_plan_select"
+                default=default_floor_plans,
+                key="floor_plan_multiselect"
             )
+            
+            # "すべて"が選択されている場合は他の選択を無視する
+            if "すべて" in st.session_state.selected_floor_plans and len(st.session_state.selected_floor_plans) > 1:
+                st.session_state.selected_floor_plans = ["すべて"]
+                st.rerun()
 
     def _handle_data_fetch(self, zoom_level, from_date, to_date):
         """データ取得処理"""
@@ -104,13 +112,14 @@ class GeoEstateAnalyzer:
         if st.session_state.selected_price_category != "すべて":
             filtered_df = filtered_df[filtered_df['price_category'] == st.session_state.selected_price_category]
         
-        # 間取りフィルター (正規化して比較)
-        if st.session_state.selected_floor_plan != "すべて":
-            # 選択された間取りを正規化
-            normalized_selection = unicodedata.normalize('NFKC', st.session_state.selected_floor_plan)
-            # 各値を正規化して比較
+        # 間取りフィルター (複数選択対応)
+        if "すべて" not in st.session_state.selected_floor_plans and st.session_state.selected_floor_plans:
+            # 選択された間取りを全て正規化
+            normalized_selections = [unicodedata.normalize('NFKC', fp) for fp in st.session_state.selected_floor_plans]
+            
+            # いずれかの選択肢に一致する行をフィルタリング
             filtered_df = filtered_df[filtered_df['floor_plan'].apply(
-                lambda x: unicodedata.normalize('NFKC', x) == normalized_selection
+                lambda x: unicodedata.normalize('NFKC', x) in normalized_selections
             )]
         
         # フィルタリングされたデータフレームを保存
@@ -120,8 +129,10 @@ class GeoEstateAnalyzer:
         if isinstance(st.session_state.geojson_data, dict) and 'features' in st.session_state.geojson_data:
             filtered_features = []
             
-            # 選択された間取りを正規化
-            normalized_floor_plan = unicodedata.normalize('NFKC', st.session_state.selected_floor_plan) if st.session_state.selected_floor_plan != "すべて" else None
+            # 間取り選択の正規化（複数選択対応）
+            normalized_floor_plans = None
+            if "すべて" not in st.session_state.selected_floor_plans and st.session_state.selected_floor_plans:
+                normalized_floor_plans = [unicodedata.normalize('NFKC', fp) for fp in st.session_state.selected_floor_plans]
             
             for feature in st.session_state.geojson_data['features']:
                 include_feature = True
@@ -132,12 +143,12 @@ class GeoEstateAnalyzer:
                     if properties.get('price_information_category_name_ja') != st.session_state.selected_price_category:
                         include_feature = False
                 
-                # 間取りフィルター (正規化して比較)
-                if st.session_state.selected_floor_plan != "すべて":
+                # 間取りフィルター（複数選択対応）
+                if normalized_floor_plans:
                     feature_floor_plan = properties.get('floor_plan_name_ja', '')
                     if feature_floor_plan:
                         normalized_feature_floor_plan = unicodedata.normalize('NFKC', feature_floor_plan)
-                        if normalized_feature_floor_plan != normalized_floor_plan:
+                        if normalized_feature_floor_plan not in normalized_floor_plans:
                             include_feature = False
                     else:
                         include_feature = False
