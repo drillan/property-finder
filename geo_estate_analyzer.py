@@ -327,6 +327,9 @@ class GeoEstateAnalyzer:
             df['price_per_area'].isna().all()):
             return
         
+        # 期間のソート順を決定
+        sorted_periods = sorted(df['period'].unique())
+        
         fig = px.box(
             df,
             x='period',
@@ -336,6 +339,7 @@ class GeoEstateAnalyzer:
                 'price_per_area': '単位面積あたりの価格（円/㎡）',
                 'period': '期間'
             },
+            category_orders={'period': sorted_periods}  # ソート順を明示的に指定
         )
         fig.update_layout(
             showlegend=False,
